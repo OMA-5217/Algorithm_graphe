@@ -1,0 +1,255 @@
+from tkinter import *
+from tkinter import Menu, filedialog, messagebox, simpledialog
+import json
+import math
+
+# Fenêtre principale
+root = Tk()
+root.title("Graphe et Matrices")
+root.geometry("800x600")
+
+# Structures pour les sommets et arêtes
+sommet_list = []
+arete_list = []
+modifications_apportees = False
+
+# Canvas principal
+canvas = Canvas(root, bg="white")
+canvas.pack(fill="both", expand=True)
+
+def notifier_modification():
+    """Marquer les modifications apportées."""
+    global modifications_apportees
+    modifications_apportees = True
+
+def recharger_canvas():
+    """Redessiner le graphe sur le canvas."""
+    canvas.delete("all")
+    # Dessiner les arêtes
+    for i, ((x1, y1), (x2, y2)) in enumerate(arete_list):
+        canvas.create_line(x1, y1, x2, y2, fill="black", width=2)
+        xm, ym = (x1 + x2) / 2, (y1 + y2) / 2
+        canvas.create_text(xm, ym, text=f"E{i+1}", font=("Arial", 10), fill="red")
+    # Dessiner les sommets
+    for i, (x, y) in enumerate(sommet_list):
+        radius = 15
+        canvas.create_oval(x - radius, y - radius, x + radius, y + radius, fill="yellow", outline="black")
+        canvas.create_text(x, y, text=str(i + 1), font=("Arial", 12))
+
+def calculer_matrice_adjacence():
+    """Calculer la matrice d'adjacence."""
+    n = len(sommet_list)
+    matrice = [[0] * n for _ in range(n)]
+    try:
+        for (x1, y1), (x2, y2) in arete_list:
+            i = sommet_list.index((x1, y1))
+            j = sommet_list.index((x2, y2))
+            matrice[i][j] += 1
+            matrice[j][i] += 1  # Graphe non orienté
+    except ValueError as e:
+        messagebox.showerror("Erreur", f"Erreur lors du calcul : {e}")
+    return matrice
+
+def calculer_matrice_incidence():
+    """Calculer la matrice d'incidence."""
+    n = len(sommet_list)
+    m = len(arete_list)
+    matrice = [[0] * m for _ in range(n)]
+    try:
+        for e, ((x1, y1), (x2, y2)) in enumerate(arete_list):
+            i = sommet_list.index((x1, y1))
+            j = sommet_list.index((x2, y2))
+            matrice[i][e] = 1
+            matrice[j][e] = 1
+    except ValueError as e:
+        messagebox.showerror("Erreur", f"Erreur lors du calcul : {e}")
+    return matrice
+
+def afficher_matrice(matrice, titre):
+    """Afficher une matrice dans une nouvelle fenêtre."""
+    nouvelle_fenetre = Toplevel(root)
+    nouvelle_fenetre.title(titre)
+    for i, ligne in enumerate(matrice):
+        for j, valeur in enumerate(ligne):
+            Label(nouvelle_fenetre, text=str(valeur), borderwidth=1, relief="solid", width=5).grid(row=i, column=j)
+
+def verifier_chaine_eulerienne():
+    """Vérifier si une chaîne eulérienne existe."""
+    degres = [0] * len(sommet_list)
+    try:
+        for (x1, y1), (x2, y2) in arete_list:
+            i = sommet_list.index((x1, y1))
+            j = sommet_list.index((x2, y2))
+            degres[i] += 1
+            degres[j] += 1
+    except ValueError as e:
+        messagebox.showerror("Erreur", f"Erreur lors de la vérification : {e}")
+        return False
+    impairs = sum(d % 2 for d in degres)
+    return impairs == 0 or impairs == 2
+
+def afficher_chaine_eulerienne():
+    """Afficher une chaîne eulérienne si elle existe."""
+    if verifier_chaine_eulerienne():
+        messagebox.showinfo("Chaîne eulérienne", "Une chaîne eulérienne existe.")
+        for (x1, y1), (x2, y2) in arete_list:
+            canvas.create_line(x1, y1, x2, y2, fill="red", width=2)
+    else:
+        messagebox.showinfo("Chaîne eulérienne", "Aucune chaîne eulérienne n'existe.")
+
+def trouver_chemin(s1, s2):
+    """Trouver un chemin entre deux sommets avec BFS."""
+    from collections import deque
+    adj_list = {i: [] for i in range(len(sommet_list))}
+    try:
+        for (x1, y1), (x2, y2) in arete_list:
+            i = sommet_list.index((x1, y1))
+            j = sommet_list.index((x2, y2))
+            adj_list[i].append(j)
+            adj_list[j].append(i)
+    except ValueError as e:
+        messagebox.showerror("Erreur", f"Erreur lors de la recherche du chemin : {e}")
+        return []
+    queue = deque([(s1, [s1])])
+    visited = set()
+    while queue:
+        current, path = queue.popleft()
+        if current == s2:
+            return path
+        if current not in visited:
+            visited.add(current)
+            for neighbor in adj_list[current]:
+                queue.append((neighbor, path + [neighbor]))
+    return []
+
+def afficher_chemin():
+    """Afficher un chemin entre deux sommets choisis."""
+    try:
+        s1 = simpledialog.askinteger("Chemin", "Entrer le sommet de départ :") - 1
+        s2 = simpledialog.askinteger("Chemin", "Entrer le sommet d'arrivée :") - 1
+        if 0 <= s1 < len(sommet_list) and 0 <= s2 < len(sommet_list):
+            chemin = trouver_chemin(s1, s2)
+            if chemin:
+                for i in range(len(chemin) - 1):
+                    x1, y1 = sommet_list[chemin[i]]
+                    x2, y2 = sommet_list[chemin[i + 1]]
+                    canvas.create_line(x1, y1, x2, y2, fill="blue", width=2)
+                messagebox.showinfo("Chemin", f"Chemin trouvé : {chemin}")
+            else:
+                messagebox.showwarning("Chemin", "Aucun chemin trouvé.")
+        else:
+            messagebox.showerror("Erreur", "Numéro de sommet invalide.")
+    except TypeError:
+        messagebox.showwarning("Annulation", "Aucune valeur entrée.")
+
+
+
+def verifier_sauvegarde():
+    """Vérifie si des modifications doivent être enregistrées avant de poursuivre."""
+    if modifications_apportees:
+        reponse = messagebox.askyesnocancel("Enregistrer", "Des modifications ont été apportées. Voulez-vous les enregistrer ?")
+        if reponse:  # Oui
+            enregistrer_fichier()
+            return True
+        elif reponse is None:  # Annuler
+            return False
+    return True
+def notifier_modification():
+    """Marque le graphe comme modifié."""
+    global modifications_apportees
+    modifications_apportees = True
+
+def reset_modifications():
+    """Réinitialise l'état des modifications."""
+    global modifications_apportees
+    modifications_apportees = False
+
+def fermeture_fenetre():
+    """Intercepte la fermeture de la fenêtre et vérifie les modifications."""
+    if verifier_sauvegarde():
+        root.destroy()
+
+def nouveau_fichier():
+    global sommet_list, arete_list, sommet_count, selected_sommets, fichier_actuel
+    if not verifier_sauvegarde():
+        return
+    sommet_list = []
+    arete_list = []
+    sommet_count = 0
+    selected_sommets = []
+    fichier_actuel = None
+    canvas.delete("all")
+    reset_modifications()
+    messagebox.showinfo("Nouveau", "Nouvelle interface vierge créée")
+
+def ouvrir_fichier():
+    global fichier_actuel
+    if not verifier_sauvegarde():
+        return
+    fichier = filedialog.askopenfilename(title="Ouvrir un fichier", filetypes=(("Fichiers JSON", "*.json"),))
+    if fichier:
+        try:
+            with open(fichier, 'r') as f:
+                data = json.load(f)
+                charger_graphe(data)
+                fichier_actuel = fichier
+                reset_modifications()
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible de charger le fichier : {e}")
+
+def enregistrer_fichier():
+    global fichier_actuel
+    if not fichier_actuel:
+        fichier_actuel = filedialog.asksaveasfilename(title="Enregistrer sous", defaultextension=".json", filetypes=(("Fichiers JSON", "*.json"),))
+    if fichier_actuel:
+        try:
+            data = {"sommets": sommet_list, "aretes": arete_list}
+            with open(fichier_actuel, 'w') as f:
+                json.dump(data, f)
+            reset_modifications()
+            messagebox.showinfo("Enregistrer", f"Fichier enregistré sous : {fichier_actuel}")
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible d'enregistrer le fichier : {e}")
+
+def charger_graphe(data):
+    global sommet_list, arete_list, sommet_count
+    nouveau_fichier()
+    sommet_list = data["sommets"]
+    sommet_count = len(sommet_list)
+    for i, (x, y) in enumerate(sommet_list):
+        radius = 15
+        canvas.create_oval(x - radius, y - radius, x + radius, y + radius, fill="yellow", outline="black")
+        canvas.create_text(x, y, text=str(i + 1), font=("Arial", 12))
+    arete_list = data["aretes"]
+    for (x1, y1), (x2, y2) in arete_list:
+        canvas.create_line(x1, y1, x2, y2, fill="black", width=2)
+
+menu_bar = Menu(root)
+
+# Menu Fichier
+menu_fichier = Menu(menu_bar, tearoff=0)
+menu_fichier.add_command(label="Nouveau", command=nouveau_fichier)
+menu_fichier.add_command(label="Ouvrir", command=ouvrir_fichier)
+menu_fichier.add_command(label="Enregistrer", command=enregistrer_fichier)
+menu_fichier.add_command(label="Enregistrer sous", command=lambda: enregistrer_fichier())
+menu_fichier.add_command(label="Fermer", command=lambda: root.quit() if verifier_sauvegarde() else None)
+menu_bar.add_cascade(label="Fichier", menu=menu_fichier)        
+
+
+
+
+
+# Ajout des menus
+
+menu_affichage = Menu(menu_bar, tearoff=0)
+menu_affichage.add_command(label="Afficher le graphe", command=recharger_canvas)
+menu_affichage.add_command(label="Matrice d'adjacence", command=lambda: afficher_matrice(calculer_matrice_adjacence(), "Matrice d'adjacence"))
+menu_affichage.add_command(label="Matrice d'incidence", command=lambda: afficher_matrice(calculer_matrice_incidence(), "Matrice d'incidence"))
+menu_affichage.add_command(label="Chaîne eulérienne", command=afficher_chaine_eulerienne)
+menu_affichage.add_command(label="Chemin entre sommets", command=afficher_chemin)
+menu_bar.add_cascade(label="Affichage", menu=menu_affichage)
+
+
+root.config(menu=menu_bar)
+
+root.mainloop()
